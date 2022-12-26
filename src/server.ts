@@ -9,19 +9,14 @@ app.use(express.json());
 app.use(cors());
 dotenv.config();
 const PORT_NUMBER = process.env.PORT ?? 4000;
-//update the env file after making an elephantSQL
 const client = new Client(process.env.DATABASE_URL);
 client.connect();
 
-export interface highscoreItem {
+export interface HighscoreItem {
   id: number;
   name: string;
   highscore: number;
 }
-
-// export interface nameText {
-//   name: string;
-// }
 
 //API info page
 app.get("/", (req, res) => {
@@ -35,7 +30,7 @@ app.get("/items", async (req, res) => {
     const queryResponse = await client.query(`
       select * 
       from highscores 
-      ORDER BY score DESC
+      ORDER BY highscore DESC
     `);
     const allItems = queryResponse.rows;
     res.status(200).json(allItems);
@@ -65,27 +60,19 @@ app.get<{ id: string }>("/items/:id", async (req, res) => {
 });
 
 // POST /items
-app.post<{}, {}, highscoreItem>("/items", async (req, res) => {
-  try {  
-    const currentHighscores = await client.query(`
-      SELECT * 
-      FROM highscores 
-      ORDER BY highscore DESC
-    `);
-    // insert the new highscore into the correct position in the array
-    const newHighscores = [...currentHighscores.rows];
-    let i = 0;
-    while (i < newHighscores.length && req.body.highscore < newHighscores[i].highscore) {
-      i++;
-    }
-    newHighscores.splice(i, 0, req.body);
-    // update the database with the new highscores
-    await client.query('DELETE FROM highscores');
-    for (const hs of newHighscores) {
-      await client.query('INSERT INTO highscores (name, highscore) VALUES (?, ?)', [hs.name, hs.highscore]);
-    }
-    res.status(201).json(req.body);
-    await client.end();
+app.post<{}, {}, HighscoreItem>("/items", async (req, res) => {
+  try {
+    const values = [req.body.name, req.body.highscore];
+    const queryResponse = await client.query(
+      `
+      insert into highscores (name, highscore) 
+      values ($1, $2) 
+      returning *
+    `,
+      values
+    );
+    const createdItem = queryResponse.rows[0];
+    res.status(201).json(createdItem);
   } catch (err) {
     console.error(err);
   }
@@ -120,8 +107,8 @@ app.listen(PORT_NUMBER, () => {
 // app.delete("/highscore-items", async (req, res) => {
 //   try {
 //     const queryResponse = await client.query(`
-//       delete from highscores 
-//       where highscore = true 
+//       delete from highscores
+//       where highscore = true
 //       returning *
 //     `);
 //     const returnedItems = queryResponse.rows;
@@ -132,7 +119,7 @@ app.listen(PORT_NUMBER, () => {
 // });
 
 // // PATCH /items/:id
-// app.patch<{ id: string }, {}, Partial<highscoreItem>>(
+// app.patch<{ id: string }, {}, Partial<HighscoreItem>>(
 //   "/items/:id",
 //   async (req, res) => {
 //     const patchData = req.body;
@@ -173,7 +160,7 @@ app.listen(PORT_NUMBER, () => {
 //         update highscores
 //         set name = $1
 //         where id = $2
-//         returning *  
+//         returning *
 //       `,
 //           values
 //         );
